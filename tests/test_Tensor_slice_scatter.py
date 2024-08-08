@@ -23,31 +23,141 @@ def test_case_1():
     pytorch_code = textwrap.dedent(
         """
         import torch
-        a = torch.zeros(8, 8)
-        b = torch.ones(8)
-        result = a.slice_scatter(b, start=6)
+        x = torch.zeros(8, 8)
+        y = torch.ones(8, 8)
+        result = x.slice_scatter(y)
         """
     )
-    obj.run(
-        pytorch_code,
-        ["result"],
-        unsupport=True,
-        reason="paddle does not support this function temporarily",
-    )
+    obj.run(pytorch_code, ["result"])
 
 
 def test_case_2():
     pytorch_code = textwrap.dedent(
         """
         import torch
-        a = torch.zeros(8, 8)
-        b = torch.ones(2)
-        result = a.slice_scatter(b, dim=1, start=2, end=6, step=2)
+        x = torch.zeros(8, 8)
+        y = torch.ones(8, 8)
+        result = x.slice_scatter(y, dim=1)
         """
     )
-    obj.run(
-        pytorch_code,
-        ["result"],
-        unsupport=True,
-        reason="paddle does not support this function temporarily",
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_3():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        x = torch.zeros(8, 8)
+        y = torch.ones(6, 8)
+        result = x.slice_scatter(y, end=6)
+        """
     )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_4():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        x = torch.zeros(8, 8)
+        y = torch.ones(8, 6)
+        result = x.slice_scatter(y, 1, end=6)
+        """
+    )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_5():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        x = torch.zeros(8, 8)
+        y = torch.ones(8, 2)
+        result = x.slice_scatter(y, dim=1, start=2, end=6, step=2)
+        """
+    )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_6():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        x = torch.zeros(8, 8)
+        y = torch.ones(8, 2)
+        result = x.slice_scatter(src=y, dim=1, start=2, end=6, step=2)
+        """
+    )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_7():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        a = torch.zeros(8, 8)
+        b = torch.ones(8, 2)
+        result = a.slice_scatter(dim=1, src=b, step=2, start=2, end=6)
+        """
+    )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_8():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        a = torch.zeros(8, 8)
+        b = torch.ones(8, 2)
+        result = a.slice_scatter(b, 1, 2, 6, 2)
+        """
+    )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_9():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        a = torch.zeros(8, 8)
+        b = torch.ones(8, 6)
+        result = a.slice_scatter(dim=1, src=b, start=2)
+        """
+    )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_10():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        a = torch.zeros(8, 8)
+        b = torch.ones(8, 6)
+        result = a.slice_scatter(dim=1, src=b, end=6)
+        """
+    )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_11():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        a = torch.zeros(8, 8)
+        b = torch.ones(8, 8)
+        result = a.slice_scatter(src=b)
+        """
+    )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_12():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        a = torch.zeros(8, 8)
+        b = torch.ones(6, 8)
+        result = a.slice_scatter(src=b, start=2)
+        """
+    )
+    obj.run(pytorch_code, ["result"])

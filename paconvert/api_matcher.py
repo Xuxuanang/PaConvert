@@ -148,6 +148,70 @@ class GenericMatcher(BaseMatcher):
         return code
 
 
+class SliceScatterMatcher(BaseMatcher):
+    def generate_code(self, kwargs):
+        if "input" in kwargs:
+            kwargs["x"] = kwargs.pop("input")
+            x = kwargs["x"]
+        else:
+            x = self.paddleClass
+        kwargs["value"] = kwargs.pop("src")
+
+        API_TEMPLATE = textwrap.dedent(
+            """
+            shape = {}.shape
+            axes, starts, ends, strides  = [0], [0], shape[0], [1]
+            """
+        )
+        code = API_TEMPLATE.format(x)
+        if "dim" in kwargs.keys():
+            if "end" not in kwargs.keys():
+                API_TEMPLATE = textwrap.dedent(
+                    """
+                    axes, ends = [{}], shape[{}]
+                    """
+                )
+                code += API_TEMPLATE.format(kwargs["dim"], kwargs.pop("dim"))
+            else:
+                API_TEMPLATE = textwrap.dedent(
+                    """
+                    axes, ends = [{}], [{}]
+                    """
+                )
+                code += API_TEMPLATE.format(kwargs.pop("dim"), kwargs.pop("end"))
+        else:
+            if "end" in kwargs.keys():
+                API_TEMPLATE = textwrap.dedent(
+                    """
+                    ends = [{}]
+                    """
+                )
+                code += API_TEMPLATE.format(kwargs.pop("end"))
+
+        if "start" in kwargs.keys():
+            API_TEMPLATE = textwrap.dedent(
+                """
+                starts = [{}]
+                """
+            )
+            code += API_TEMPLATE.format(kwargs.pop("start"))
+        if "step" in kwargs.keys():
+            API_TEMPLATE = textwrap.dedent(
+                """
+                strides = [{}]
+                """
+            )
+            code += API_TEMPLATE.format(kwargs.pop("step"))
+
+        API_TEMPLATE = textwrap.dedent(
+            """
+            {}({}, axes=axes, starts=starts, ends=ends, strides=strides)
+            """
+        )
+        code += API_TEMPLATE.format(self.get_paddle_api(), self.kwargs_to_str(kwargs))
+        return code
+
+
 class TensorFunc2PaddleFunc(BaseMatcher):
     def generate_code(self, kwargs):
         kwargs_change = {}
@@ -794,9 +858,6 @@ class GetDevicePropertiesMatcher(BaseMatcher):
 
 class GeluMatcher(BaseMatcher):
     def generate_code(self, kwargs):
-        if "input" in kwargs:
-            kwargs["x"] = kwargs.pop("input")
-
         if "approximate" in kwargs:
             approximate_v = kwargs.pop("approximate")
             if "none" in approximate_v:
@@ -804,8 +865,7 @@ class GeluMatcher(BaseMatcher):
             elif "tanh" in approximate_v:
                 kwargs["approximate"] = "True"
 
-        code = "{}({})".format(self.get_paddle_api(), self.kwargs_to_str(kwargs))
-        return code
+        return GenericMatcher.generate_code(self, kwargs)
 
 
 class SequentialMatcher(BaseMatcher):
@@ -2102,7 +2162,6 @@ class IsNonzeroMatcher(BaseMatcher):
 # will implenment by aux_code
 class TensorIndexCopyMatcher(BaseMatcher):
     def generate_code(self, kwargs):
-
         if kwargs["dim"][1:-1].isdigit() and int(kwargs["dim"][1:-1]) == 0:
             code = "{}.scatter_({}, {})".format(
                 self.paddleClass, kwargs["index"], kwargs["source"]
@@ -3081,7 +3140,6 @@ class TensorReshapeMatcher(BaseMatcher):
 
 class TensorReshape_asMatcher(BaseMatcher):
     def generate_code(self, kwargs):
-
         API_TEMPLATE = textwrap.dedent(
             """
             {}.reshape({}.shape)
@@ -3094,7 +3152,6 @@ class TensorReshape_asMatcher(BaseMatcher):
 
 class TensorResize_as_Matcher(BaseMatcher):
     def generate_code(self, kwargs):
-
         API_TEMPLATE = textwrap.dedent(
             """
             {}.reshape_({}.shape)
@@ -3301,7 +3358,6 @@ class TensorMhMatcher(BaseMatcher):
 
 class SpecialXLog1pYMatcher(BaseMatcher):
     def generate_code(self, kwargs):
-
         API_TEMPLATE = textwrap.dedent(
             """
             {} * paddle.log1p(paddle.to_tensor({}))
@@ -3314,22 +3370,10 @@ class SpecialXLog1pYMatcher(BaseMatcher):
         return code
 
 
-class FunctionalKLDivMatcher(BaseMatcher):
+class ProcessReduceMatcher(BaseMatcher):
     def generate_code(self, kwargs):
         process_reduce_and_size_average(kwargs)
-
-        if "target" in kwargs:
-            kwargs["label"] = kwargs.pop("target")
-        log_target = kwargs.pop("log_target", False)
-        API_TEMPLATE = "paddle.nn.functional.kl_div(input={}, label={}, reduction={})"
-        code = API_TEMPLATE.format(
-            kwargs.get("input"),
-            kwargs.get("label")
-            if log_target is False
-            else f"paddle.exp({kwargs.get('label')})",
-            kwargs.pop("reduction", '"""mean"""'),
-        )
-        return code
+        return GenericMatcher.generate_code(self, kwargs)
 
 
 class FunctionalSmoothL1LossMatcher(BaseMatcher):
@@ -3445,10 +3489,9 @@ class RNNMatcher(BaseMatcher):
             batch_first = False
         kwargs["time_major"] = f"not {batch_first}"
 
-        kwargs["direction"] = "'forward'"
         if "bidirectional" in kwargs:
-            if "True" in kwargs["bidirectional"]:
-                direction = "'bidirect'"
+            if "(True)" == kwargs["bidirectional"]:
+                kwargs["direction"] = "'bidirect'"
             kwargs.pop("bidirectional")
 
         return GenericMatcher.generate_code(self, kwargs)
@@ -3512,33 +3555,6 @@ class Tuple2ListMatcher(BaseMatcher):
 
         code = "{}({})".format(self.get_paddle_api(), self.kwargs_to_str(new_kwargs))
 
-        return code
-
-
-class ParameterMatcher(BaseMatcher):
-    def generate_code(self, kwargs):
-        if "requires_grad" in kwargs:
-            requires_grad_v = kwargs["requires_grad"]
-        else:
-            requires_grad_v = "True"
-
-        API_TEMPLATE = textwrap.dedent(
-            """
-            {} = paddle.create_parameter(shape={}.shape, dtype={}.numpy().dtype, default_initializer=paddle.nn.initializer.Assign({}))
-            {}.stop_gradient = not {}
-            {}
-            """
-        )
-        out = get_unique_name("out")
-        code = API_TEMPLATE.format(
-            out,
-            kwargs["data"],
-            kwargs["data"],
-            kwargs["data"],
-            out,
-            requires_grad_v,
-            out,
-        )
         return code
 
 
@@ -3937,10 +3953,7 @@ class FunctionalLinearMatcher(BaseMatcher):
     def generate_code(self, kwargs):
         kwargs["weight"] = "{}.T".format(kwargs["weight"])
 
-        if "input" in kwargs:
-            kwargs["x"] = kwargs.pop("input")
-
-        return "{}({})".format(self.get_paddle_api(), self.kwargs_to_str(kwargs))
+        return GenericMatcher.generate_code(self, kwargs)
 
 
 class FunctionalBilinearMatcher(BaseMatcher):
@@ -4341,7 +4354,6 @@ class SDPAttnMatcher(BaseMatcher):
 
 class Is_PinnedMatcher(BaseMatcher):
     def generate_code(self, kwargs):
-
         code = f"'pinned' in str({self.paddleClass}.place)"
 
         return code

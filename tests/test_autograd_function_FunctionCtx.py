@@ -17,48 +17,36 @@ import textwrap
 
 from apibase import APIBase
 
-obj = APIBase("torch.Tensor.hsplit")
+obj = APIBase("torch.autograd.function.FunctionCtx")
 
 
 def test_case_1():
     pytorch_code = textwrap.dedent(
         """
         import torch
-        t = torch.arange(16.0).reshape(4, 4)
-        result = t.hsplit(2)
-        """
-    )
-    obj.run(pytorch_code, ["result"])
+        from torch.autograd import Function
 
+        # Inherit from Function
+        class MyFunction(Function):
+            @staticmethod
+            def forward(ctx, x):
+                # Store some tensors for backward
+                ctx.x = x
+                return x * 2
 
-def test_case_2():
-    pytorch_code = textwrap.dedent(
-        """
-        import torch
-        t = torch.arange(16.0).reshape(4, 4)
-        result = t.hsplit([3, 6])
-        """
-    )
-    obj.run(pytorch_code, ["result"])
+            @staticmethod
+            def backward(ctx, grad_output):
+                # Retrieve stored tensors
+                x = ctx.x
+                grad_input = grad_output * 2
+                return grad_input
 
+        data = torch.tensor([1.0, 2.0, 3.0], requires_grad=True)
+        output = MyFunction.apply(data)
+        output.backward(torch.tensor([1.0, 1.0, 1.0]))
 
-def test_case_3():
-    pytorch_code = textwrap.dedent(
-        """
-        import torch
-        t = torch.arange(12).reshape(3, 2, 2)
-        result = t.hsplit(indices=[1, 2])
-        """
-    )
-    obj.run(pytorch_code, ["result"])
-
-
-def test_case_4():
-    pytorch_code = textwrap.dedent(
-        """
-        import torch
-        t = torch.arange(16.0).reshape(4, 4)
-        result = t.hsplit(sections=2)
+        result = data.grad
+        result.requires_grad = False
         """
     )
     obj.run(pytorch_code, ["result"])
