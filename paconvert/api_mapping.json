@@ -5647,6 +5647,7 @@
     "args_list": [
       "input",
       "other",
+      "*",
       "out"
     ],
     "kwargs_change": {
@@ -5875,7 +5876,10 @@
     "min_input_args": 1,
     "args_list": [
       "device"
-    ]
+    ],
+    "kwargs_change": {
+      "device": "id"
+    }
   },
   "torch.cuda.device_count": {
     "Matcher": "GenericMatcher",
@@ -6400,6 +6404,9 @@
   "torch.distributed.get_world_size": {
     "Matcher": "GenericMatcher",
     "paddle_api": "paddle.distributed.get_world_size",
+    "args_list": [
+      "group"
+    ],
     "min_input_args": 0
   },
   "torch.distributed.init_process_group": {
