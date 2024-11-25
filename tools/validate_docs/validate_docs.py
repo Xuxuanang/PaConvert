@@ -173,6 +173,7 @@ PRESET_MATCHER_KWARGS_CHANGE_PAIRS = {
     "CifarMatcher": {"root": "data_file","train": "mode"},
     "MNISTMatcher": {"train": "mode"},
     "Flowers102Matcher": {"split": "mode"},
+    "BoxesConvertMatcher": {"input": "x"},
 }
 
 
