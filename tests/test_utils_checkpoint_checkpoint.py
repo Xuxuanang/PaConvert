@@ -112,7 +112,5 @@ def test_case_5():
     )
     obj.run(
         pytorch_code,
-        ["result"],
-        unsupport=True,
-        reason="paddle unsupported param determinism_check ",
+        ["result"]
     )

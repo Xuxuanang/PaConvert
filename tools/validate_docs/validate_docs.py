@@ -169,6 +169,10 @@ PRESET_MATCHER_KWARGS_CHANGE_PAIRS = {
     "FunctionalPadMatcher": {"input": "x"},
     "FunctionalSmoothL1LossMatcher": {"beta": "delta"},
     "OptimOptimizerMatcher": {"params": "parameters"},
+    "RNNMatcher": {"batch_first": "time_major"},
+    "CifarMatcher": {"root": "data_file","train": "mode"},
+    "MNISTMatcher": {"train": "mode"},
+    "Flowers102Matcher": {"split": "mode"},
 }
 
 
@@ -208,6 +212,8 @@ overloadable_api_aux_set = {
     "torch.dsplit",
     "torch.hsplit",
     "torch.tensor_split",
+    "torch.vsplit",
+    "torch.nn.Module.to"
 }
 
 cornercase_api_aux_dict = {
