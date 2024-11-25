@@ -170,7 +170,7 @@ PRESET_MATCHER_KWARGS_CHANGE_PAIRS = {
     "FunctionalSmoothL1LossMatcher": {"beta": "delta"},
     "OptimOptimizerMatcher": {"params": "parameters"},
     "RNNMatcher": {"batch_first": "time_major"},
-    "CifarMatcher": {"root": "data_file","train": "mode"},
+    "CifarMatcher": {"root": "data_file", "train": "mode"},
     "MNISTMatcher": {"train": "mode"},
     "Flowers102Matcher": {"split": "mode"},
     "BoxesConvertMatcher": {"input": "x"},
@@ -214,7 +214,7 @@ overloadable_api_aux_set = {
     "torch.hsplit",
     "torch.tensor_split",
     "torch.vsplit",
-    "torch.nn.Module.to"
+    "torch.nn.Module.to",
 }
 
 cornercase_api_aux_dict = {

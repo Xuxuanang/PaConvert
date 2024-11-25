@@ -110,7 +110,4 @@ def test_case_5():
         result = checkpoint(f, x, y, z, transform, use_reentrant=False, determinism_check="none")
         """
     )
-    obj.run(
-        pytorch_code,
-        ["result"]
-    )
+    obj.run(pytorch_code, ["result"])
