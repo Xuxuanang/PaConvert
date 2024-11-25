@@ -17662,7 +17662,7 @@
   },
   "torchvision.datasets.VOCDetection": {
     "Matcher": "VOCDetectionMatcher",
-    "paddle_api": "paddle.vision.datasets.VOCDetection",
+    "paddle_api": "paddle.vision.datasets.VOC2012",
     "args_list": [
       "root",
       "year",
