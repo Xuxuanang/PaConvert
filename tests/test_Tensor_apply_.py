@@ -13,8 +13,19 @@
 # limitations under the License.
 #
 
-import torch
+import textwrap
 
-print("#########################case1#########################")
-a = torch.tensor([1, 2, 3], dtype=torch.int64)
-b = a.new_empty((3, 4), dtype=torch.float64, requires_grad=True, pin_memory=True)
+from apibase import APIBase
+
+obj = APIBase("torch.Tensor.apply_")
+
+
+def test_case_1():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        x = torch.tensor([1.3192, 1.9915, 1.9674, 1.7151])
+        result = x.apply_(lambda x: x*2)
+        """
+    )
+    obj.run(pytorch_code, ["x", "result"])

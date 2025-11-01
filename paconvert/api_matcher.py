@@ -365,35 +365,49 @@ class AtleastMatcher(BaseMatcher):
         return ast.parse(code).body
 
 
-# These APIs only change API name, but not change API args/kwargs
-class UnchangeMatcher(BaseMatcher):
+class EinopsTorchMatcher(BaseMatcher):
     def get_paddle_api(self):
-        assert "paddle_api" in self.api_mapping_dict
-        return super().get_paddle_api()
+        return self.torch_api.replace("einops.layers.torch", "einops.layers.paddle")
 
     def get_paddle_nodes(self, args, kwargs):
-        args = self.parse_args(args)
-        kwargs = self.parse_kwargs(kwargs, allow_none=True)
-        if kwargs is None:
-            return None
-        kwargs = self.change_kwargs(kwargs)
-        kwargs = self.set_paddle_default_kwargs(kwargs)
-        code = "{}({})".format(
-            self.get_paddle_api(), self.args_and_kwargs_to_str(args, kwargs)
-        )
-        return ast.parse(code).body
-
-    def get_paddle_class_nodes(self, func, args, kwargs):
-        return "unchange"
-
-    def get_paddle_class_attribute_nodes(self, node):
-        return "unchange"
+        return ChangeAPIMatcher.get_paddle_nodes(self, args, kwargs)
 
 
 # These APIs only change torch.* to paddle.*, not change any other thing
 class NoNeedConvertMatcher(BaseMatcher):
     def get_paddle_api(self):
-        return self.torch_api.replace("torch.", "paddle.")
+        assert "paddle_api" not in self.api_mapping_dict
+        if self.paddle_api:
+            return self.paddle_api
+        else:
+            return self.torch_api.replace("torch.", "paddle.")
+
+    def get_paddle_nodes(self, args, kwargs):
+        args = self.parse_args(args)
+        kwargs = self.parse_kwargs(kwargs, allow_none=True)
+
+        # temporary delete these unsupport args, which paddle does not support now
+        for k in ["layout", "generator", "memory_format", "sparse_grad"]:
+            if k in kwargs:
+                kwargs.pop(k)
+
+        code = "{}({})".format(
+            self.get_paddle_api(), self.args_and_kwargs_to_str(args, kwargs)
+        )
+        return ast.parse(code).body
+
+    def get_paddle_class_attribute_nodes(self, node):
+        return "unchange"
+
+
+# These APIs only change API name, but not change API args/kwargs
+class ChangeAPIMatcher(BaseMatcher):
+    def get_paddle_api(self):
+        assert "paddle_api" in self.api_mapping_dict
+        assert "unsupport_args" not in self.api_mapping_dict
+        assert "kwargs_change" not in self.api_mapping_dict
+        assert "paddle_default_kwargs" not in self.api_mapping_dict
+        return super().get_paddle_api()
 
     def get_paddle_nodes(self, args, kwargs):
         args = self.parse_args(args)
@@ -409,27 +423,45 @@ class NoNeedConvertMatcher(BaseMatcher):
         )
         return ast.parse(code).body
 
-    def get_paddle_class_nodes(self, func, args, kwargs):
-        return "unchange"
 
-    def get_paddle_class_attribute_nodes(self, node):
-        return "unchange"
-
-
-class EinopsTorchMatcher(BaseMatcher):
+class CheckPointMatcher(BaseMatcher):
     def get_paddle_nodes(self, args, kwargs):
-        self.set_paddle_api(
-            self.torch_api.replace("einops.layers.torch", "einops.layers.paddle")
+        args = self.parse_args(args)
+        kwargs = self.parse_kwargs(kwargs, allow_none=True)
+
+        for k in ["context_fn", "determinism_check", "debug"]:
+            if k in kwargs:
+                kwargs.pop(k)
+
+        code = "{}({})".format(
+            self.get_paddle_api(), self.args_and_kwargs_to_str(args, kwargs)
         )
-        return UnchangeMatcher.get_paddle_nodes(self, args, kwargs)
+        return ast.parse(code).body
+
+
+class HubLoadMatcher(BaseMatcher):
+    def get_paddle_nodes(self, args, kwargs):
+        args = self.parse_args(args)
+        kwargs = self.parse_kwargs(kwargs, allow_none=True)
+
+        if "repo_or_dir" in kwargs:
+            kwargs["repo_dir"] = kwargs.pop("repo_or_dir")
+        for k in ["trust_repo", "verbose", "skip_validation"]:
+            if k in kwargs:
+                kwargs.pop(k)
+
+        code = "{}({})".format(
+            self.get_paddle_api(), self.args_and_kwargs_to_str(args, kwargs)
+        )
+        return ast.parse(code).body
 
 
 class TransformersGenericMatcher(BaseMatcher):
     def get_paddle_api(self):
-        return self.torch_api.replace("transformers.", "paddlenlp.transformers.")
+        return self.torch_api.replace("transformers.", "paddleformers.transformers.")
 
     def get_paddle_nodes(self, args, kwargs):
-        return UnchangeMatcher.get_paddle_nodes(self, args, kwargs)
+        return ChangeAPIMatcher.get_paddle_nodes(self, args, kwargs)
 
 
 class PaddleFlagMatcher(BaseMatcher):
@@ -548,11 +580,11 @@ class TRFMPreTrainedTokenizerMatcher(BaseMatcher):
     def generate_utils_code(self):
         CODE_TEMPLATE = textwrap.dedent(
             """
-            import paddlenlp
-            original_encode = paddlenlp.transformers.tokenizer_utils_base.PretrainedTokenizerBase.encode
+            import paddleformers
+            original_encode = paddleformers.transformers.tokenizer_utils_base.PretrainedTokenizerBase.encode
             def _encode(self, *args, **kwargs):
                 return original_encode(self, *args, **kwargs)["input_ids"]
-            setattr(paddlenlp.transformers.tokenizer_utils_base.PretrainedTokenizerBase, "encode", _encode)
+            setattr(paddleformers.transformers.tokenizer_utils_base.PretrainedTokenizerBase, "encode", _encode)
             """
         )
         return CODE_TEMPLATE
@@ -567,7 +599,7 @@ class TRFMPreTrainedModelMatcher(BaseMatcher):
         CODE_TEMPLATE = textwrap.dedent(
             """
             from typing import Optional
-            import paddlenlp
+            import paddleformers
             def _convert_head_mask_to_5d(head_mask, num_hidden_layers):
                 if head_mask.dim() == 1:
                     head_mask = head_mask.unsqueeze(0).unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
@@ -591,28 +623,28 @@ class TRFMPreTrainedModelMatcher(BaseMatcher):
                 else:
                     head_mask = [None] * num_hidden_layers
                 return head_mask
-            setattr(paddlenlp.transformers.model_utils.PretrainedModel, "get_head_mask", _get_head_mask)
+            setattr(paddleformers.transformers.model_utils.PretrainedModel, "get_head_mask", _get_head_mask)
 
-            original_generate = paddlenlp.generation.utils.GenerationMixin.generate
+            original_generate = paddleformers.generation.utils.GenerationMixin.generate
             def _generate(self, input_ids, *args, **kwargs):
                 return paddle.concat((input_ids, original_generate(self,input_ids, *args, **kwargs)[0]), axis=-1)
-            setattr(paddlenlp.generation.utils.GenerationMixin, "generate", _generate)
+            setattr(paddleformers.generation.utils.GenerationMixin, "generate", _generate)
 
-            setattr(paddlenlp.transformers.model_utils.PretrainedModel, "device", None)
+            setattr(paddleformers.transformers.model_utils.PretrainedModel, "device", None)
 
             def _post_init(self):
                 if hasattr(self, "init_weights"):
                     self.init_weights()
                 elif hasattr(self, "_init_weights"):
                     self._init_weights()
-            setattr(paddlenlp.transformers.model_utils.PretrainedModel, "post_init", _post_init)
+            setattr(paddleformers.transformers.model_utils.PretrainedModel, "post_init", _post_init)
             """
         )
         return CODE_TEMPLATE
 
     def get_paddle_nodes(self, args, kwargs):
         self.enable_utils_code()
-        return UnchangeMatcher.get_paddle_nodes(self, args, kwargs)
+        return ChangeAPIMatcher.get_paddle_nodes(self, args, kwargs)
 
 
 class SignalWindowsWatcher(BaseMatcher):
@@ -908,15 +940,12 @@ class TransformsPositiveDefiniteTransformMatcher(BaseMatcher):
 
 class Is_InferenceMatcher(BaseMatcher):
     def generate_code(self, kwargs):
-        if "input" not in kwargs:
-            kwargs["input"] = self.paddleClass
-        code = "{}.stop_gradient".format(kwargs["input"])
-        return code
+        return "{}.stop_gradient".format(kwargs["input"])
 
 
-class IInfoMatcher(BaseMatcher):
+class NumelMatcher(BaseMatcher):
     def generate_code(self, kwargs):
-        return "{}(dtype={})".format(self.get_paddle_api(), kwargs["type"])
+        return "{}.size".format(kwargs["input"])
 
 
 class AssertMatcher(BaseMatcher):
@@ -1220,7 +1249,7 @@ class _MaxMinMatcherBase(BaseMatcher):
         elif paddle_api == "paddle.max":
             self.set_paddle_api("paddle_max")
 
-        return UnchangeMatcher.get_paddle_nodes(self, args, kwargs)
+        return ChangeAPIMatcher.get_paddle_nodes(self, args, kwargs)
 
 
 class MaxMatcher(_MaxMinMatcherBase):
@@ -1528,47 +1557,47 @@ class TensorMatcher(BaseMatcher):
                     "torch.IntTensor" == self.torch_api
                     or "torch.cuda.IntTensor" == self.torch_api
                 ):
-                    code = 'paddle.to_tensor(data={}, dtype="int32")'.format(data)
+                    code = 'paddle.tensor({}, dtype="int32")'.format(data)
                 elif ("torch.ShortTensor" == self.torch_api) or (
                     "torch.cuda.ShortTensor" == self.torch_api
                 ):
-                    code = 'paddle.to_tensor(data={}, dtype="int16")'.format(data)
+                    code = 'paddle.tensor({}, dtype="int16")'.format(data)
                 elif (
                     "torch.LongTensor" == self.torch_api
                     or "torch.cuda.LongTensor" == self.torch_api
                 ):
-                    code = 'paddle.to_tensor(data={}, dtype="int64")'.format(data)
+                    code = 'paddle.tensor({}, dtype="int64")'.format(data)
                 elif ("torch.HalfTensor" == self.torch_api) or (
                     "torch.cuda.HalfTensor" == self.torch_api
                 ):
-                    code = 'paddle.to_tensor(data={}, dtype="float16")'.format(data)
+                    code = 'paddle.tensor({}, dtype="float16")'.format(data)
                 elif (
                     "torch.FloatTensor" == self.torch_api
                     or "torch.cuda.FloatTensor" == self.torch_api
                 ):
-                    code = 'paddle.to_tensor(data={}, dtype="float32")'.format(data)
+                    code = 'paddle.tensor({}, dtype="float32")'.format(data)
                 elif ("torch.DoubleTensor" == self.torch_api) or (
                     "torch.cuda.DoubleTensor" == self.torch_api
                 ):
-                    code = 'paddle.to_tensor(data={}, dtype="float64")'.format(data)
+                    code = 'paddle.tensor({}, dtype="float64")'.format(data)
                 elif (
                     "torch.ByteTensor" == self.torch_api
                     or "torch.cuda.ByteTensor" == self.torch_api
                 ):
-                    code = 'paddle.to_tensor(data={}, dtype="uint8")'.format(data)
+                    code = 'paddle.tensor({}, dtype="uint8")'.format(data)
                 elif ("torch.BoolTensor" == self.torch_api) or (
                     "torch.cuda.BoolTensor" == self.torch_api
                 ):
-                    code = 'paddle.to_tensor(data={}, dtype="bool")'.format(data)
+                    code = 'paddle.tensor({}, dtype="bool")'.format(data)
                 elif ("torch.BFloat16Tensor" == self.torch_api) or (
                     "torch.cuda.BFloat16Tensor" == self.torch_api
                 ):
-                    code = 'paddle.to_tensor(data={}, dtype="bfloat16")'.format(data)
+                    code = 'paddle.tensor({}, dtype="bfloat16")'.format(data)
                 else:
                     if len(args) > 0 and not isinstance(args[0], ast.Name):
-                        code = 'paddle.to_tensor(data={}, dtype="float32")'.format(data)
+                        code = 'paddle.tensor({}, dtype="float32")'.format(data)
                     else:
-                        code = "paddle.to_tensor(data={})".format(data)
+                        code = "paddle.tensor({})".format(data)
                 return ast.parse(code).body
 
             shape = str(shape).replace("'", "")
@@ -1976,49 +2005,9 @@ class SplitMatcher(BaseMatcher):
 
 class RangeMatcher(BaseMatcher):
     def generate_code(self, kwargs):
-        if "dtype" in kwargs:
-            dtype = kwargs["dtype"]
-        else:
-            dtype = '"""float32"""'
-
-        if "requires_grad" in kwargs:
-            stop_gradient = kwargs["requires_grad"]
-        else:
-            stop_gradient = False
-
-        if "start" in kwargs:
-            start = kwargs["start"]
-        else:
-            start = 0
-
-        if "step" in kwargs:
-            step = kwargs["step"]
-        else:
-            step = 1
-
-        out = get_unique_name("out")
-        API_TEMPLATE = textwrap.dedent(
-            """
-            {} = paddle.arange(start={}, end={}+{} if ({} - {}) % {} == 0 else {}, step={}, dtype={})
-            {}.stop_gradient = not {}
-            {}
-            """
-        )
-        code = API_TEMPLATE.format(
-            out,
-            start,
-            kwargs["end"],
-            step,
-            kwargs["end"],
-            start,
-            step,
-            kwargs["end"],
-            step,
-            dtype,
-            out,
-            stop_gradient,
-            out,
-        )
+        if "end" not in kwargs:
+            kwargs["end"] = kwargs.pop("start")
+        code = GenericMatcher.generate_code(self, kwargs)
         return code
 
 
@@ -3169,13 +3158,6 @@ class MSortMatcher(BaseMatcher):
             )
             code = API_TEMPLATE.format(kwargs["input"])
         return code
-
-
-class NumelMatcher(BaseMatcher):
-    def generate_code(self, kwargs):
-        if "input" not in kwargs:
-            kwargs["input"] = self.paddleClass
-        return "{}.size".format(kwargs["input"])
 
 
 class TriangularSolveMatcher(BaseMatcher):
@@ -4677,6 +4659,10 @@ class CanCastMatcher(BaseMatcher):
                         "bool": True,
                     }
                 }
+                if isinstance(from_, paddle.base.core.DataType):
+                    from_ = from_.name.lower()
+                if isinstance(to, paddle.base.core.DataType):
+                    to = to.name.lower()
                 return can_cast_dict[from_][to]
             """
         )
@@ -4914,7 +4900,7 @@ class TensorViewMatcher(BaseMatcher):
             """
             def _Tensor_view(self, *args, **kwargs):
                 if args:
-                    if len(args)==1 and isinstance(args[0], (tuple, list, str)):
+                    if len(args)==1 and isinstance(args[0], (tuple, list, str, paddle.base.core.DataType)):
                         return paddle.view(self, args[0])
                     else:
                         return paddle.view(self, list(args))
@@ -5238,7 +5224,11 @@ class FromBufferMatcher(BaseMatcher):
         API_TEMPLATE = textwrap.dedent(
             """
             import numpy as np
-            paddle.to_tensor(np.frombuffer(np.array({}), {}))
+            buffer = {0}
+            dtype = {1}
+            if isinstance(dtype, paddle.base.core.DataType):
+                dtype = dtype.name.lower()
+            paddle.to_tensor(np.frombuffer(np.array(buffer), dtype=dtype))
             """
         )
         code = API_TEMPLATE.format(kwargs["buffer"], kwargs["dtype"])

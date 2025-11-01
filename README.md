@@ -213,7 +213,6 @@ ______      _____                          _
 
 - **对于不支持转换的 API**：将 **补全为 Pytorch API 全名**，同时在行前通过 `>>>>>>` 的形式加以标记，用户需要对该 API 进行人工手动转换，然后删除 `>>>>>>` 标记，否则代码无法运行。
 
-
 ## 经典案例
 
 以下大语言模型代码库已经支持一键 100%转换率，欢迎学习与交流：
@@ -226,4 +225,4 @@ ______      _____                          _
 
 ## 贡献代码
 
-代码自动转换工具（[PaConvert](https://github.com/PaddlePaddle/PaConvert)）为开源贡献形式，欢迎向我们贡献代码，详细开发步骤请参考 [贡献代码教程](./docs/CONTRIBUTING.md)
+代码自动转换工具（[PaConvert](https://github.com/PaddlePaddle/PaConvert)）为开源贡献形式，欢迎向我们贡献代码，详细开发步骤请参考 [贡献代码教程](./docs/CONTRIBUTING.md)。

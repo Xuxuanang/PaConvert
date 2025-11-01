@@ -16,19 +16,26 @@ import textwrap
 
 from apibase import APIBase
 
-obj = APIBase("torch.Tensor.coalesce")
+obj = APIBase("torch.torch.int32")
 
 
 def test_case_1():
     pytorch_code = textwrap.dedent(
         """
         import torch
-        i = torch.tensor([[0, 1, 1],
-                          [2, 0, 2]])
-        v = torch.tensor([3, 4, 5], dtype=torch.float32)
-        result = torch.sparse_coo_tensor(i, v, [2, 4])
-        v = result.coalesce()
-        result = result.to_dense()
+        src = torch.tensor([1., 2., 3., 4., 5., 6.])
+        result = src.to(torch.torch.int32)
+
+        """
+    )
+    obj.run(pytorch_code, ["result"])
+
+
+def test_case_2():
+    pytorch_code = textwrap.dedent(
+        """
+        import torch
+        result = torch.tensor([1., 2., 3., 4., 5., 6.]).to(torch.torch.int32)
         """
     )
     obj.run(pytorch_code, ["result"])
